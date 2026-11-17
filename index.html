@@ -1,0 +1,2038 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LLM Pipeline Explorer</title>
+
+  <!-- External CDN Libraries (Plotly.js for 3D visualization, Transformers.js for browser sentence embeddings) -->
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js"></script>
+
+  <style>
+    /* ==========================================================================
+       DESIGN SYSTEM & THEME: SAGE, CRÈME & RED
+       Bespoke, human-crafted research aesthetic with soothing crème canvas,
+       sophisticated herbal sage greens, and warm crimson/terracotta red accents.
+       ========================================================================== */
+    :root {
+      /* Crème Surfaces */
+      --bg-canvas: #f7f4ed;          /* Warm soothing crème canvas */
+      --bg-card: #fffdf9;            /* Crisp rich crème card */
+      --bg-subtle: #efe9dc;          /* Warm crème container / badge surface */
+      --bg-input: #fcfaf5;           /* Soft crème for inputs */
+      --border-subtle: #ded5c2;      /* Delicate crème-stone border */
+      --border-focus: #526855;       /* Sage focus ring */
+      
+      /* Typography */
+      --text-main: #242f25;          /* Deep botanical sage-charcoal */
+      --text-muted: #5e6b5f;         /* Refined sage-neutral */
+      --text-dim: #8b998d;           /* Subdued sage tone */
+      
+      /* Sage Green Accents */
+      --sage-primary: #526855;       /* Signature botanical sage green */
+      --sage-hover: #3d4f40;         /* Deep woodland sage hover */
+      --sage-soft: #e2ede4;          /* Gentle sage wash */
+      --sage-border: #a5bba8;        /* Soft sage accent line */
+      --sage-dark: #273529;          /* Deep sage text accent */
+      
+      /* Red Accents */
+      --red-primary: #b92b27;        /* Striking terracotta crimson red */
+      --red-hover: #961e1b;          /* Deep garnet red */
+      --red-soft: #fbebea;           /* Soft rose-crème wash */
+      --red-border: #f0aaa7;         /* Delicate red border */
+      --red-dark: #8c1e1a;           /* Deep crimson text */
+      
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --radius-full: 9999px;
+      
+      --shadow-sm: 0 1px 3px rgba(36, 47, 37, 0.04);
+      --shadow-md: 0 4px 14px rgba(36, 47, 37, 0.05), 0 1px 3px rgba(36, 47, 37, 0.03);
+      --shadow-lg: 0 8px 26px rgba(36, 47, 37, 0.07), 0 2px 6px rgba(36, 47, 37, 0.04);
+
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --font-mono: "SF Mono", "Cascadia Code", "Fira Code", Menlo, Consolas, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--bg-canvas);
+      color: var(--text-main);
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+      padding: 32px 16px 64px;
+    }
+
+    main {
+      max-width: 1060px;
+      margin: 0 auto;
+    }
+
+    /* Header styling */
+    .header {
+      margin-bottom: 32px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    
+    .header-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--sage-dark);
+      background: var(--sage-soft);
+      border: 1px solid var(--sage-border);
+      padding: 4px 10px;
+      border-radius: var(--radius-full);
+      margin-bottom: 12px;
+    }
+
+    .header-badge::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--sage-primary);
+    }
+
+    h1 {
+      font-size: clamp(28px, 4vw, 38px);
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      color: var(--text-main);
+      margin-bottom: 8px;
+      line-height: 1.15;
+    }
+
+    .subtitle {
+      font-size: clamp(16px, 2vw, 19px);
+      color: var(--text-muted);
+      font-weight: 450;
+      max-width: 720px;
+    }
+
+    /* Section & Cards */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 28px;
+      margin-bottom: 32px;
+      box-shadow: var(--shadow-sm);
+      transition: box-shadow 0.2s ease, border-color 0.2s ease;
+    }
+
+    .card:hover {
+      box-shadow: var(--shadow-md);
+      border-color: #d1c6b1;
+    }
+
+    .card-header {
+      margin-bottom: 22px;
+    }
+
+    .card-title {
+      font-size: 22px;
+      font-weight: 750;
+      letter-spacing: -0.015em;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .card-title-number {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--sage-primary);
+      color: #fffdf9;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .card-desc {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* Form controls */
+    label {
+      display: block;
+      font-size: 14px;
+      font-weight: 650;
+      color: var(--text-main);
+      margin: 18px 0 8px;
+    }
+
+    .label-hint {
+      font-weight: 400;
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-left: 6px;
+    }
+
+    textarea, input[type="text"] {
+      width: 100%;
+      font-family: inherit;
+      font-size: 14.5px;
+      color: var(--text-main);
+      background: var(--bg-input);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 12px 14px;
+      line-height: 1.5;
+      transition: all 0.15s ease;
+    }
+
+    textarea:focus, input[type="text"]:focus {
+      outline: none;
+      background: #ffffff;
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px rgba(82, 104, 85, 0.16);
+    }
+
+    textarea {
+      resize: vertical;
+    }
+
+    .button-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 9px 18px;
+      border-radius: var(--radius-md);
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      user-select: none;
+    }
+
+    .btn-primary {
+      background: var(--sage-primary);
+      color: #fffdf9;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--sage-hover);
+      box-shadow: var(--shadow-md);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .btn-red {
+      background: var(--red-primary);
+      color: #ffffff;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .btn-red:hover:not(:disabled) {
+      background: var(--red-hover);
+      box-shadow: var(--shadow-md);
+    }
+
+    .btn-secondary {
+      background: var(--bg-subtle);
+      color: var(--text-main);
+      border-color: var(--border-subtle);
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: #e3dcce;
+      border-color: #cbbfab;
+    }
+
+    /* Slider area */
+    .slider-box {
+      margin-top: 20px;
+      padding: 18px 20px;
+      background: #f5efe3;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+    }
+
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 8px;
+    }
+
+    .slider-label {
+      font-weight: 650;
+      font-size: 14.5px;
+      color: var(--text-main);
+    }
+
+    .slider-val-badge {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 2px 8px;
+      background: var(--sage-soft);
+      color: var(--sage-dark);
+      border: 1px solid var(--sage-border);
+      border-radius: var(--radius-sm);
+    }
+
+    input[type="range"] {
+      width: 100%;
+      height: 6px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: #d8cebc;
+      border-radius: 4px;
+      outline: none;
+      margin: 10px 0 6px;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--sage-primary);
+      box-shadow: 0 1px 3px rgba(36, 47, 37, 0.3);
+      cursor: pointer;
+      transition: transform 0.1s ease, background 0.15s ease;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+      background: var(--sage-hover);
+    }
+
+    .helper-text {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 6px;
+      line-height: 1.45;
+    }
+
+    /* Vocabulary chips */
+    .vocab-chips-container {
+      margin-top: 14px;
+    }
+
+    .vocab-chips-title {
+      font-size: 13px;
+      font-weight: 650;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 8px;
+    }
+
+    .vocab-chips-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      max-height: 140px;
+      overflow-y: auto;
+      padding: 4px 2px;
+    }
+
+    .vocab-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: #fffdf9;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 3px 8px;
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      color: var(--text-main);
+      box-shadow: 0 1px 1px rgba(0,0,0,0.02);
+    }
+
+    .vocab-badge-count {
+      font-size: 11px;
+      color: var(--sage-primary);
+      font-weight: 700;
+      background: var(--bg-subtle);
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+
+    /* Token chips output */
+    .token-output-box {
+      margin-top: 16px;
+      padding: 18px;
+      background: #faf6ee;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+    }
+
+    .chips-flow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: stretch;
+      margin-top: 8px;
+    }
+
+    .token-chip {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 6px 10px;
+      border-radius: var(--radius-sm);
+      border: 1px solid transparent;
+      box-shadow: 0 1px 2px rgba(36, 47, 37, 0.04);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      min-width: 44px;
+    }
+
+    .token-chip:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 3px 8px rgba(36, 47, 37, 0.08);
+    }
+
+    .token-chip.subword-piece {
+      border-left: 3px solid var(--red-primary) !important;
+      border-top-left-radius: 2px;
+      border-bottom-left-radius: 2px;
+    }
+
+    .token-chip-text {
+      font-family: var(--font-mono);
+      font-size: 15px;
+      font-weight: 600;
+      line-height: 1.2;
+    }
+
+    .token-chip-id {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      opacity: 0.85;
+      margin-top: 3px;
+    }
+
+    .token-stats-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 16px;
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px dashed var(--border-subtle);
+      font-size: 13.5px;
+      color: var(--text-muted);
+    }
+
+    .token-stat-item strong {
+      color: var(--text-main);
+      font-weight: 700;
+    }
+
+    .token-expansion-pill {
+      font-size: 12px;
+      font-weight: 650;
+      padding: 2px 8px;
+      border-radius: var(--radius-full);
+      background: var(--sage-soft);
+      color: var(--sage-dark);
+      border: 1px solid var(--sage-border);
+    }
+
+    /* Section 2: 3D Visualization */
+    .plot-container {
+      margin-top: 20px;
+      background: #fffdf9;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      position: relative;
+    }
+
+    #plot {
+      width: 100%;
+      height: 520px;
+    }
+
+    .plot-helper-tip {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      padding: 8px 14px;
+      background: #f5efe3;
+      border-top: 1px solid var(--border-subtle);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    /* Progress bar */
+    .progress-box {
+      margin-top: 14px;
+      padding: 14px;
+      background: var(--red-soft);
+      border: 1px solid var(--red-border);
+      border-radius: var(--radius-md);
+      display: none;
+    }
+
+    .progress-title {
+      font-size: 13.5px;
+      font-weight: 650;
+      color: var(--red-dark);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .progress-track {
+      width: 100%;
+      height: 7px;
+      background: #f3dad8;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      width: 0%;
+      height: 100%;
+      background: var(--red-primary);
+      transition: width 0.2s ease;
+    }
+
+    .status-msg {
+      margin-top: 10px;
+      font-size: 13.5px;
+      line-height: 1.45;
+    }
+
+    .status-msg.error {
+      color: var(--red-dark);
+      padding: 10px 14px;
+      background: var(--red-soft);
+      border: 1px solid var(--red-border);
+      border-radius: var(--radius-md);
+    }
+
+    .status-msg.info {
+      color: var(--sage-dark);
+      padding: 10px 14px;
+      background: var(--sage-soft);
+      border: 1px solid var(--sage-border);
+      border-radius: var(--radius-md);
+    }
+
+    /* Tables */
+    .table-container {
+      margin-top: 18px;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      overflow-x: auto;
+      background: #fffdf9;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13.5px;
+      text-align: left;
+    }
+
+    th {
+      background: #f5efe3;
+      padding: 10px 14px;
+      font-weight: 650;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border-subtle);
+      font-size: 12.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    td {
+      padding: 9px 14px;
+      border-bottom: 1px solid #eee7d7;
+      color: var(--text-main);
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover td {
+      background: #f9f5ec;
+    }
+
+    .similarity-pill {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 650;
+      color: var(--sage-dark);
+      background: var(--sage-soft);
+      border: 1px solid var(--sage-border);
+      padding: 2px 7px;
+      border-radius: var(--radius-sm);
+    }
+
+    /* Section 2c: Custom point box */
+    .custom-sentence-card {
+      margin-top: 26px;
+      padding: 22px;
+      background: #f6f0e2;
+      border: 1px solid #dbcfb7;
+      border-radius: var(--radius-md);
+    }
+
+    .custom-input-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 8px;
+      align-items: stretch;
+      flex-wrap: wrap;
+    }
+
+    .custom-input-row input {
+      flex: 1;
+      min-width: 260px;
+    }
+
+    .custom-result-area {
+      margin-top: 16px;
+      display: none;
+    }
+
+    .custom-step-box {
+      background: #fffdf9;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+
+    .custom-step-title {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--red-primary);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .vector-preview-code {
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      background: #f7f2e8;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 8px 12px;
+      overflow-x: auto;
+      color: #3b473c;
+      margin-top: 6px;
+    }
+
+    .custom-points-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .custom-point-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--red-soft);
+      border: 1px solid var(--red-border);
+      color: var(--red-dark);
+      font-size: 12px;
+      font-weight: 650;
+      padding: 4px 10px;
+      border-radius: var(--radius-full);
+    }
+
+    .clear-btn {
+      font-size: 12px;
+      padding: 4px 8px;
+      background: transparent;
+      color: var(--text-dim);
+      border: none;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+    .clear-btn:hover {
+      color: var(--red-primary);
+    }
+
+    /* Details collapsible */
+    details {
+      margin-top: 14px;
+      font-size: 13.5px;
+    }
+    
+    summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--sage-primary);
+      user-select: none;
+    }
+
+    summary:hover {
+      color: var(--sage-hover);
+      text-decoration: underline;
+    }
+
+    /* Footer */
+    footer {
+      margin-top: 48px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border-subtle);
+      text-align: center;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    @media (max-width: 680px) {
+      body {
+        padding: 20px 12px 48px;
+      }
+      .card {
+        padding: 20px 16px;
+      }
+      #plot {
+        height: 420px;
+      }
+      .custom-input-row button {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+
+<body>
+<main>
+  <!-- PAGE HEADER -->
+  <header class="header">
+    <div class="header-badge">Interactive Machine Learning Explorer</div>
+    <h1>LLM Pipeline Explorer</h1>
+    <p class="subtitle">How text becomes tokens, and then becomes points in 3D space.</p>
+  </header>
+
+  <!-- =====================================================================
+       SECTION 1: TOKENIZER
+       ===================================================================== -->
+  <section class="card" id="section-tokenizer">
+    <div class="card-header">
+      <h2 class="card-title">
+        <span class="card-title-number">1</span>
+        Tokenizer
+      </h2>
+      <p class="card-desc">
+        Language models don't read words directly. They break text into subword tokens according to a finite learned vocabulary.
+      </p>
+    </div>
+
+    <!-- 1a. Training corpus -->
+    <label for="corpus">Sentences to learn words from</label>
+    <textarea id="corpus" rows="6" spellcheck="false">The cat sat on the mat.
+The dog sat on the rug.
+The cat saw the dog!
+A dog and a cat can be friends.
+Do you like the cat?
+I don't like the rain, but I like the sun.</textarea>
+
+    <!-- 1b. Build vocabulary button -->
+    <div class="button-group">
+      <button id="build-vocab-btn" class="btn-primary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        Build vocabulary
+      </button>
+    </div>
+
+    <!-- Vocabulary Slider Container -->
+    <div id="vocab-slider-box" class="slider-box" style="display: none;">
+      <div class="slider-header">
+        <span class="slider-label">Words kept in vocabulary:</span>
+        <span id="vocab-slider-val" class="slider-val-badge">0 / 0</span>
+      </div>
+      <input type="range" id="vocab-slider" min="1" max="25" value="25">
+      <p class="helper-text">
+        Drag left to shrink the vocabulary. Dropped words get split into smaller subword pieces — watch the token count grow.
+      </p>
+
+      <!-- Words kept in vocabulary chips -->
+      <div class="vocab-chips-container">
+        <div class="vocab-chips-title">Words kept in vocabulary:</div>
+        <div id="vocab-chips-list" class="vocab-chips-list"></div>
+      </div>
+
+      <!-- Collapsible vocabulary table for detailed inspection -->
+      <details>
+        <summary>View complete token index &amp; subword pieces table</summary>
+        <div id="vocab-full-table-box" class="table-container" style="max-height: 240px; overflow-y: auto;">
+          <!-- Rendered dynamically -->
+        </div>
+      </details>
+    </div>
+
+    <!-- 1c. Encode a sentence -->
+    <label for="encode-input" style="margin-top: 24px;">Encode a sentence</label>
+    <input type="text" id="encode-input" value="The dogs liked the sunny zebra." spellcheck="false">
+    
+    <div class="button-group">
+      <button id="tokenize-btn" class="btn-primary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+        Tokenize
+      </button>
+    </div>
+
+    <!-- Tokenization Output -->
+    <div id="token-output-area"></div>
+  </section>
+
+
+  <!-- =====================================================================
+       SECTION 2: EMBEDDINGS IN 3D
+       ===================================================================== -->
+  <section class="card" id="section-embeddings">
+    <div class="card-header">
+      <h2 class="card-title">
+        <span class="card-title-number">2</span>
+        Embeddings in 3D
+      </h2>
+      <p class="card-desc">
+        Each sentence is mapped into a 384-dimensional semantic space via MiniLM, then projected to 3D with Principal Component Analysis (PCA).
+      </p>
+    </div>
+
+    <!-- 2a. Sentence list -->
+    <label for="sentences">Sentences (one per line)</label>
+    <textarea id="sentences" rows="8" spellcheck="false">The cat sat on the mat.
+A kitten rested on the rug.
+The bat sat on the mat.
+I love programming in Python.
+Coding in Python is my passion.
+Pythons are large snakes.
+The stock market crashed today.
+Share prices fell sharply.</textarea>
+
+    <!-- 2b. Embed and plot button -->
+    <div class="button-group">
+      <button id="embed-btn" class="btn-primary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
+        Embed and plot
+      </button>
+    </div>
+
+    <!-- Model Loading & Progress Bar -->
+    <div id="model-progress-box" class="progress-box">
+      <div class="progress-title">
+        <span id="model-progress-label">Downloading MiniLM model...</span>
+        <span id="model-progress-percent">0%</span>
+      </div>
+      <div class="progress-track">
+        <div id="model-progress-bar" class="progress-bar-fill"></div>
+      </div>
+    </div>
+
+    <!-- Status Messages -->
+    <div id="embed-status"></div>
+
+    <!-- 3D Plot Container -->
+    <div id="plot-wrapper" style="display: none;">
+      <div class="plot-container">
+        <div id="plot"></div>
+        <div class="plot-helper-tip">
+          <span><strong>Navigation:</strong> Click &amp; drag to rotate · Scroll to zoom · Hover over markers to inspect full sentences</span>
+          <span id="plot-cluster-badge" style="color: var(--sage-dark); font-weight: 700;"></span>
+        </div>
+      </div>
+
+      <!-- Closest pairs table -->
+      <div id="pairs-output"></div>
+    </div>
+
+    <!-- 2c. Try your own word or sentence -->
+    <div class="custom-sentence-card">
+      <label for="new-word" style="margin-top: 0; font-size: 15px;">
+        Try your own word or sentence
+        <span class="label-hint">Follow it through the entire pipeline: tokens &rarr; vector &rarr; 3D space</span>
+      </label>
+      
+      <div class="custom-input-row">
+        <input type="text" id="new-word" placeholder="e.g. My kitten is sleeping, or: Tech stocks rallied" spellcheck="false">
+        <button id="add-word-btn" class="btn-red">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Tokenize, embed &amp; add to plot
+        </button>
+      </div>
+
+      <!-- Active custom points tags -->
+      <div id="custom-points-bar" style="margin-top: 10px; display: none;">
+        <span style="font-size: 12px; color: var(--text-muted); font-weight: 600;">Custom points on plot:</span>
+        <div id="custom-points-list" class="custom-points-list"></div>
+      </div>
+
+      <!-- User Word Output Details -->
+      <div id="new-word-output" class="custom-result-area"></div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <p>Built as a single-file interactive exploration of modern LLM text representation.</p>
+    <p style="margin-top: 4px; font-size: 12px; color: var(--text-dim);">
+      Uses WordPiece-style subword vocabulary with greedy longest-match &bull; Xenova/all-MiniLM-L6-v2 ONNX in browser &bull; Covariance PCA projection
+    </p>
+  </footer>
+</main>
+
+
+<!-- =========================================================================
+     JAVASCRIPT LOGIC
+     1. Tokenizer (Corpus parsing, frequency sorting, subwords, greedy match)
+     2. Embeddings (Transformers.js pipeline, pooling, normalization)
+     3. Dimensionality Reduction (3D PCA via orthogonalized power iteration)
+     4. Visualization (Plotly 3D scatter chart & styling)
+     5. UI wiring and reactive state updates
+     ========================================================================= -->
+<script>
+// ===========================================================================
+// SECTION 1: TOKENIZER LOGIC
+// ===========================================================================
+
+// State for Tokenizer
+let vocab = null;               // Map: token string -> integer token ID
+let sortedWords = [];           // Unique words from corpus sorted by frequency desc (ties alphabetical)
+let wordCounts = {};            // Word -> count in training corpus
+let subwordPieces = [];         // Array of subword pieces ("##s", single chars, etc.)
+let corpusCharacters = [];      // Set of characters seen in corpus
+
+// Common English subword endings (Bert / WordPiece style)
+const COMMON_ENDINGS = ["##s", "##es", "##ed", "##ing", "##er", "##ly", "##y", "##est", "##ment", "##tion"];
+
+/**
+ * Splits raw text into words while keeping punctuation as separate tokens
+ * and handling apostrophes sensibly (e.g. "don't" stays intact as a contraction).
+ */
+function splitCorpusIntoTokens(rawText) {
+  if (!rawText) return [];
+  const lower = rawText.toLowerCase();
+  // Match words with optional apostrophes (contractions like don't, it's), or individual punctuation marks
+  const tokens = lower.match(/[a-z0-9]+(?:'[a-z0-9]+)?|[.,!?:;"'()\-–—]/g) || [];
+  return tokens;
+}
+
+/**
+ * Builds vocabulary from the training corpus textarea:
+ * - Lowercases and tokenizes text
+ * - Counts word frequencies
+ * - Sorts words by frequency desc (ties alphabetical)
+ * - Identifies all characters to prevent unknown character failures
+ */
+function buildVocabulary() {
+  const corpusText = document.getElementById("corpus").value.trim();
+  if (!corpusText) {
+    alert("Please enter at least one sentence in the training corpus.");
+    return;
+  }
+
+  const tokens = splitCorpusIntoTokens(corpusText);
+  if (tokens.length === 0) {
+    alert("Could not extract any words or punctuation from the training corpus.");
+    return;
+  }
+
+  // Count word frequencies
+  wordCounts = {};
+  for (const t of tokens) {
+    wordCounts[t] = (wordCounts[t] || 0) + 1;
+  }
+
+  // Sort unique words: most frequent first; alphabetical on ties
+  sortedWords = Object.keys(wordCounts).sort((a, b) => {
+    if (wordCounts[b] !== wordCounts[a]) {
+      return wordCounts[b] - wordCounts[a];
+    }
+    return a.localeCompare(b);
+  });
+
+  // Extract all characters seen in corpus + guarantee standard a-z alphabet
+  const lettersInCorpus = [...new Set(tokens.join("").replace(/[^a-z]/g, ""))].sort();
+  const allAlphabet = [..."abcdefghijklmnopqrstuvwxyz"];
+  const combinedLetters = [...new Set([...lettersInCorpus, ...allAlphabet])].sort();
+
+  // Common punctuation characters
+  const commonPunct = [".", ",", "!", "?", "'", "-", ":", ";"];
+
+  // Subword pieces: common endings + single chars + continuation pieces ("##a"..."##z")
+  subwordPieces = [
+    ...COMMON_ENDINGS,
+    ...combinedLetters,
+    ...combinedLetters.map(ch => "##" + ch),
+    ...commonPunct
+  ];
+
+  // Configure slider: range 1 up to total unique words
+  const slider = document.getElementById("vocab-slider");
+  slider.min = 1;
+  slider.max = sortedWords.length;
+  slider.value = sortedWords.length;
+  document.getElementById("vocab-slider-box").style.display = "block";
+
+  // Apply full vocabulary size
+  applyVocabSize(sortedWords.length);
+
+  // If encode input has text, run or update tokenization
+  tokenizeSentence();
+}
+
+/**
+ * Updates vocabulary state based on kept word count N (from slider).
+ * Builds lookup table, kept word badges, and full token index.
+ */
+function applyVocabSize(n) {
+  const clampedN = Math.max(1, Math.min(n, sortedWords.length));
+  const keptWords = sortedWords.slice(0, clampedN);
+
+  // Update slider badge text
+  const pct = Math.round((clampedN / sortedWords.length) * 100);
+  document.getElementById("vocab-slider-val").textContent = `${clampedN} of ${sortedWords.length} words (${pct}%)`;
+
+  // Build dictionary: 0 is [UNK], then kept words, then subword pieces
+  vocab = { "[UNK]": 0 };
+  let currentId = 1;
+
+  // 1. Kept words get IDs
+  let keptChipsHtml = "";
+  let fullTableHtml = `<table><tr><th>ID</th><th>Token</th><th>Type</th><th>Corpus Freq</th></tr>`;
+  fullTableHtml += `<tr><td><code>0</code></td><td><code>[UNK]</code></td><td>Special</td><td>-</td></tr>`;
+
+  keptWords.forEach(w => {
+    vocab[w] = currentId++;
+    const count = wordCounts[w] || 0;
+    keptChipsHtml += `<span class="vocab-badge"><span>${escapeHtml(w)}</span><span class="vocab-badge-count">${count}</span></span>`;
+    fullTableHtml += `<tr><td><code>${vocab[w]}</code></td><td><code>${escapeHtml(w)}</code></td><td>Whole Word</td><td>${count}</td></tr>`;
+  });
+
+  // 2. Subword pieces get IDs
+  subwordPieces.forEach(p => {
+    if (p in vocab) return; // May already exist as a single-letter whole word
+    vocab[p] = currentId++;
+    fullTableHtml += `<tr><td><code>${vocab[p]}</code></td><td><code>${escapeHtml(p)}</code></td><td>Subword Piece</td><td>-</td></tr>`;
+  });
+
+  fullTableHtml += `</table>`;
+
+  // Update UI chips & table
+  document.getElementById("vocab-chips-list").innerHTML = keptChipsHtml;
+  document.getElementById("vocab-full-table-box").innerHTML = fullTableHtml;
+}
+
+/**
+ * Splits an out-of-vocabulary word into the longest known subword pieces (greedy longest match).
+ * Example: "dogs" -> "dog" + "##s", "sunny" -> "sun" + "##n" + "##y".
+ * Fallback to single characters guarantees normal text never fails to [UNK].
+ */
+function splitIntoSubwords(word) {
+  const pieces = [];
+  let start = 0;
+
+  while (start < word.length) {
+    let matchedPiece = null;
+
+    // Greedy longest match: test from remaining word length down to 1
+    for (let end = word.length; end > start; end--) {
+      let piece = word.slice(start, end);
+      if (start > 0) piece = "##" + piece; // Continuation pieces get "##" prefix
+
+      if (piece in vocab) {
+        matchedPiece = piece;
+        break;
+      }
+    }
+
+    if (matchedPiece !== null) {
+      pieces.push({
+        text: matchedPiece,
+        id: vocab[matchedPiece],
+        isSubword: start > 0 || matchedPiece.startsWith("##")
+      });
+      start += matchedPiece.replace(/^##/, "").length;
+    } else {
+      // Fallback: match single character
+      const ch = word[start];
+      const fallbackPiece = (start > 0) ? ("##" + ch) : ch;
+      const pieceId = vocab[fallbackPiece] ?? vocab[ch] ?? vocab["[UNK]"];
+      
+      pieces.push({
+        text: (start > 0 && !(ch in vocab)) ? ("##" + ch) : (vocab[fallbackPiece] ? fallbackPiece : ch),
+        id: pieceId,
+        isSubword: start > 0
+      });
+      start += 1;
+    }
+  }
+
+  return pieces;
+}
+
+/**
+ * Encodes an entire sentence into an array of { text, id, isSubword } token objects.
+ */
+function encodeSentenceToTokens(text) {
+  if (!vocab) buildVocabulary();
+  const words = splitCorpusIntoTokens(text);
+  const tokens = [];
+
+  for (const w of words) {
+    if (w in vocab) {
+      // Known whole word
+      tokens.push({ text: w, id: vocab[w], isSubword: false });
+    } else {
+      // Unknown word: break into subwords via greedy longest match
+      tokens.push(...splitIntoSubwords(w));
+    }
+  }
+
+  return tokens;
+}
+
+/**
+ * Generates an accessible, pleasing color based on the integer token ID
+ * styled in the Sage, Crème & Red design system.
+ * The same token ID always gets the exact same color.
+ */
+function colorForTokenId(id) {
+  if (id === 0) return { bg: "#ede8dd", border: "#d4ccbe", text: "#5a5348" }; // [UNK] muted crème-gray
+  
+  // Bespoke palette alternating Sage, Crème, and Red
+  const themeTones = [
+    { bg: "#e2ede4", border: "#a8c0ab", text: "#253a28" }, // Sage green light
+    { bg: "#f5eee1", border: "#d9cbba", text: "#4a3c2c" }, // Crème warm
+    { bg: "#faeae9", border: "#e8adab", text: "#7a1e1b" }, // Red soft wash
+    { bg: "#ebf2eb", border: "#b8d0bb", text: "#1e3321" }, // Pale sage herbal
+    { bg: "#faeedc", border: "#e3ccaf", text: "#593e21" }, // Rich crème sand
+    { bg: "#fce3e1", border: "#eda29d", text: "#8b1f1a" }, // Terracotta rose red
+    { bg: "#dbe7dc", border: "#9bb59f", text: "#2a3d2d" }, // Medium sage
+    { bg: "#f7f1e6", border: "#dacbb8", text: "#423627" }  // Vanilla crème
+  ];
+  
+  return themeTones[id % themeTones.length];
+}
+
+/**
+ * Renders an array of token objects into styled HTML chips.
+ */
+function renderTokenChips(tokens) {
+  let html = `<div class="chips-flow">`;
+  for (const t of tokens) {
+    const color = colorForTokenId(t.id);
+    const subwordClass = t.isSubword ? "subword-piece" : "";
+    html += `
+      <div class="token-chip ${subwordClass}" style="background: ${color.bg}; border-color: ${color.border}; color: ${color.text};">
+        <span class="token-chip-text">${escapeHtml(t.text)}</span>
+        <span class="token-chip-id">#${t.id}</span>
+      </div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+/**
+ * Tokenizes the sentence from the input box and displays chips + stats.
+ */
+function tokenizeSentence() {
+  if (!vocab) buildVocabulary();
+  const inputEl = document.getElementById("encode-input");
+  const rawText = inputEl.value.trim();
+  const outputBox = document.getElementById("token-output-area");
+
+  if (!rawText) {
+    outputBox.innerHTML = `<div class="status-msg error">Please enter a sentence to tokenize.</div>`;
+    return;
+  }
+
+  const rawWords = splitCorpusIntoTokens(rawText);
+  const tokens = encodeSentenceToTokens(rawText);
+  const chipsHtml = renderTokenChips(tokens);
+
+  const wordCount = rawWords.length;
+  const tokenCount = tokens.length;
+  const ratio = wordCount > 0 ? (tokenCount / wordCount).toFixed(2) : "0";
+  const subwordCount = tokens.filter(t => t.isSubword).length;
+
+  let expansionLabel = "Whole words";
+  if (subwordCount > 0) {
+    expansionLabel = `${subwordCount} subword piece${subwordCount > 1 ? 's' : ''}`;
+  }
+
+  outputBox.innerHTML = `
+    <div class="token-output-box">
+      ${chipsHtml}
+      <div class="token-stats-bar">
+        <div class="token-stat-item">Words: <strong>${wordCount}</strong></div>
+        <div class="token-stat-item">Tokens: <strong>${tokenCount}</strong></div>
+        <div class="token-stat-item">Tokens / Word: <strong>${ratio}</strong></div>
+        <div class="token-expansion-pill">${expansionLabel}</div>
+      </div>
+    </div>`;
+}
+
+/**
+ * Helper to escape HTML characters safely.
+ */
+function escapeHtml(str) {
+  if (typeof str !== "string") return "";
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+
+// ===========================================================================
+// SECTION 2: EMBEDDINGS & PCA 3D VISUALIZATION
+// ===========================================================================
+
+// State for 3D Embeddings
+let sentenceEmbedder = null;     // Transformers.js pipeline instance
+let fittedPCA = null;           // Fitted PCA model: { mean, components, project }
+let baseSentences = [];         // Array of baseline sentences
+let baseVectors = [];           // 384-dimensional normalized vectors for base sentences
+let customPoints = [];          // User added points: [{ text, vector, coords: [x,y,z] }]
+let clusterColors = [];         // Color assigned to each base sentence point
+let isOfflineFallbackMode = false; // Flag if user toggled offline fallback mode
+
+// Accessible cluster palette: Sage, Red, Olive, Crimson, Forest Sage, Terracotta Red
+const CLUSTER_PALETTE = [
+  "#4a6850", // Sage Green deep
+  "#b92b27", // Crimson Red
+  "#6b866c", // Medium Herb Sage
+  "#c84338", // Warm Terracotta Red
+  "#2f4233", // Forest Pine Sage
+  "#8e1c18"  // Deep Garnet Red
+];
+
+/**
+ * Computes vector L2 norm and returns a normalized copy.
+ */
+function l2Normalize(v) {
+  let sumSq = 0;
+  for (let i = 0; i < v.length; i++) sumSq += v[i] * v[i];
+  const mag = Math.sqrt(sumSq) || 1;
+  return v.map(x => x / mag);
+}
+
+/**
+ * Dot product of two vectors of equal length.
+ */
+function dotProduct(a, b) {
+  let sum = 0;
+  for (let i = 0; i < a.length; i++) sum += a[i] * b[i];
+  return sum;
+}
+
+/**
+ * Cosine similarity between two L2-normalized vectors (dot product).
+ */
+function cosineSimilarity(a, b) {
+  return dotProduct(a, b);
+}
+
+/**
+ * High-dimensional semantic character-n-gram embedding generator.
+ * Used as an automatic offline fallback if CDN/Hugging Face is unreachable.
+ */
+function computeFallbackEmbedding(text, dim = 384) {
+  const s = text.toLowerCase().trim();
+  const v = new Array(dim).fill(0);
+  // Word tokens
+  const words = splitCorpusIntoTokens(s);
+  for (const w of words) {
+    let hw = 0;
+    for (let c = 0; c < w.length; c++) hw = (hw * 31 + w.charCodeAt(c)) >>> 0;
+    v[hw % dim] += 2.0;
+  }
+  // Character n-grams (bi-grams & tri-grams)
+  for (let i = 0; i + 2 <= s.length; i++) {
+    const gram2 = s.slice(i, i + 2);
+    let h2 = 0;
+    for (let c = 0; c < gram2.length; c++) h2 = (h2 * 37 + gram2.charCodeAt(c)) >>> 0;
+    v[h2 % dim] += 1.0;
+    if (i + 3 <= s.length) {
+      const gram3 = s.slice(i, i + 3);
+      let h3 = 0;
+      for (let c = 0; c < gram3.length; c++) h3 = (h3 * 41 + gram3.charCodeAt(c)) >>> 0;
+      v[h3 % dim] += 1.5;
+    }
+  }
+  return l2Normalize(v);
+}
+
+/**
+ * Loads the Transformers.js feature extraction pipeline for Xenova/all-MiniLM-L6-v2.
+ * Shows a loading progress indicator on initial download.
+ */
+async function getSentenceEmbedder() {
+  if (isOfflineFallbackMode) return null;
+  if (sentenceEmbedder) return sentenceEmbedder;
+
+  const progressBox = document.getElementById("model-progress-box");
+  const progressBar = document.getElementById("model-progress-bar");
+  const progressPercent = document.getElementById("model-progress-percent");
+  const progressLabel = document.getElementById("model-progress-label");
+
+  progressBox.style.display = "block";
+  progressBar.style.width = "5%";
+  progressPercent.textContent = "Loading...";
+
+  try {
+    // Check if transformers is available globally via script or dynamic import
+    let pipelineFn;
+    let envObj;
+
+    if (window.transformers && window.transformers.pipeline) {
+      pipelineFn = window.transformers.pipeline;
+      envObj = window.transformers.env;
+    } else {
+      const module = await import("https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2");
+      pipelineFn = module.pipeline;
+      envObj = module.env;
+    }
+
+    if (envObj) {
+      envObj.allowLocalModels = false;
+      if (envObj.backends?.onnx?.wasm) {
+        envObj.backends.onnx.wasm.numThreads = 1;
+      }
+    }
+
+    progressLabel.textContent = "Downloading Xenova/all-MiniLM-L6-v2 (quantized ONNX)...";
+
+    sentenceEmbedder = await pipelineFn("feature-extraction", "Xenova/all-MiniLM-L6-v2", {
+      progress_callback: (info) => {
+        if (info.status === "progress" && typeof info.progress === "number") {
+          const pct = Math.min(100, Math.max(0, Math.round(info.progress)));
+          progressBar.style.width = pct + "%";
+          progressPercent.textContent = pct + "%";
+          if (info.file) {
+            progressLabel.textContent = `Downloading ${info.file}... (${pct}%)`;
+          }
+        } else if (info.status === "ready" || info.status === "done") {
+          progressBar.style.width = "100%";
+          progressPercent.textContent = "100%";
+        }
+      }
+    });
+
+    progressBox.style.display = "none";
+    return sentenceEmbedder;
+  } catch (err) {
+    progressBox.style.display = "none";
+    console.warn("Transformers.js CDN download notice:", err);
+    throw err;
+  }
+}
+
+/**
+ * Computes embedding for a single text using the sentence embedder with mean pooling + L2 normalization,
+ * or character-ngram fallback if running offline.
+ */
+async function computeSentenceEmbedding(text) {
+  if (isOfflineFallbackMode) {
+    return computeFallbackEmbedding(text, 384);
+  }
+  try {
+    const embedder = await getSentenceEmbedder();
+    if (!embedder) return computeFallbackEmbedding(text, 384);
+    // Mean pooling + normalize produces a 384-dim unit vector
+    const output = await embedder(text, { pooling: "mean", normalize: true });
+    return Array.from(output.data);
+  } catch (err) {
+    if (isOfflineFallbackMode) {
+      return computeFallbackEmbedding(text, 384);
+    }
+    throw err;
+  }
+}
+
+/**
+ * Plain JavaScript PCA Implementation:
+ * Reduces high-dimensional vectors to 3 dimensions using sample covariance
+ * and Gram-Schmidt orthogonalized power iteration for the top 3 principal components.
+ * Retains mean and components so custom user sentences can be projected onto the exact same basis!
+ */
+function fitPCAto3D(vectors) {
+  const n = vectors.length;
+  const d = vectors[0].length; // 384 dimensions
+
+  // 1. Compute empirical mean vector
+  const mean = new Array(d).fill(0);
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < d; j++) {
+      mean[j] += vectors[i][j];
+    }
+  }
+  for (let j = 0; j < d; j++) {
+    mean[j] /= n;
+  }
+
+  // 2. Center data matrix X (n x d)
+  const X = vectors.map(v => v.map((val, j) => val - mean[j]));
+
+  // 3. Find top 3 principal component directions
+  const components = [];
+  const maxComponents = Math.min(3, n - 1);
+
+  for (let k = 0; k < 3; k++) {
+    if (k >= maxComponents) {
+      // Fallback orthogonal basis vector if fewer than 4 points
+      const fallback = new Array(d).fill(0);
+      fallback[k % d] = 1;
+      components.push(fallback);
+      continue;
+    }
+
+    // Deterministic, non-zero seed vector to ensure reproducible power iteration
+    let v = new Array(d);
+    for (let j = 0; j < d; j++) {
+      v[j] = Math.sin((j + 1) * (k + 1) * 1.6180339887);
+    }
+    v = l2Normalize(v);
+
+    // Initial orthogonalization against previous components
+    for (const prev of components) {
+      const proj = dotProduct(v, prev);
+      for (let j = 0; j < d; j++) v[j] -= proj * prev[j];
+    }
+    v = l2Normalize(v);
+
+    // Power iteration: compute w = (1 / (n - 1)) * X^T * (X * v)
+    for (let iter = 0; iter < 60; iter++) {
+      // Step a: u = X * v (vector of length n)
+      const u = new Array(n);
+      for (let i = 0; i < n; i++) {
+        let sum = 0;
+        const row = X[i];
+        for (let j = 0; j < d; j++) sum += row[j] * v[j];
+        u[i] = sum;
+      }
+
+      // Step b: w = X^T * u (vector of length d)
+      const w = new Array(d).fill(0);
+      for (let i = 0; i < n; i++) {
+        const uVal = u[i];
+        const row = X[i];
+        for (let j = 0; j < d; j++) w[j] += row[j] * uVal;
+      }
+      for (let j = 0; j < d; j++) w[j] /= (n - 1);
+
+      // Step c: Gram-Schmidt orthogonalization against prior components
+      for (const prev of components) {
+        const proj = dotProduct(w, prev);
+        for (let j = 0; j < d; j++) w[j] -= proj * prev[j];
+      }
+
+      // Step d: Normalize
+      const nextV = l2Normalize(w);
+
+      // Check convergence
+      let diff = 0;
+      for (let j = 0; j < d; j++) {
+        const dVal = nextV[j] - v[j];
+        diff += dVal * dVal;
+      }
+      v = nextV;
+      if (diff < 1e-12) break;
+    }
+
+    components.push(v);
+  }
+
+  // Return PCA object with projection functions
+  return {
+    mean: mean,
+    components: components, // 3 vectors of length 384
+    project: function(vector) {
+      // Subtract mean and compute inner product with each principal component
+      const centered = vector.map((val, j) => val - mean[j]);
+      return [
+        dotProduct(centered, components[0]),
+        dotProduct(centered, components[1]),
+        dotProduct(centered, components[2])
+      ];
+    },
+    projectAll: function(vecs) {
+      return vecs.map(v => this.project(v));
+    }
+  };
+}
+
+/**
+ * Fast k-Means clustering in high-dimensional vector space:
+ * Partitions sentences into k semantic clusters to color-code points.
+ */
+function clusterVectors(vectors, k = 3, maxIters = 25) {
+  const n = vectors.length;
+  const d = vectors[0].length;
+  if (n <= k) return vectors.map((_, i) => i % CLUSTER_PALETTE.length);
+
+  // Initialize centroids with k-means++
+  const centroids = [vectors[0].slice()];
+  for (let c = 1; c < k; c++) {
+    const dists = vectors.map(v => {
+      let minDist = Infinity;
+      for (const cent of centroids) {
+        let dist = 0;
+        for (let j = 0; j < d; j++) {
+          const diff = v[j] - cent[j];
+          dist += diff * diff;
+        }
+        if (dist < minDist) minDist = dist;
+      }
+      return minDist;
+    });
+
+    let maxIdx = 0, maxVal = -1;
+    for (let i = 0; i < n; i++) {
+      if (dists[i] > maxVal) {
+        maxVal = dists[i];
+        maxIdx = i;
+      }
+    }
+    centroids.push(vectors[maxIdx].slice());
+  }
+
+  let assignments = new Array(n).fill(0);
+
+  for (let iter = 0; iter < maxIters; iter++) {
+    let changed = false;
+    // Assign points to nearest centroid
+    for (let i = 0; i < n; i++) {
+      let bestCluster = 0;
+      let bestDist = Infinity;
+      for (let c = 0; c < k; c++) {
+        let dist = 0;
+        for (let j = 0; j < d; j++) {
+          const diff = vectors[i][j] - centroids[c][j];
+          dist += diff * diff;
+        }
+        if (dist < bestDist) {
+          bestDist = dist;
+          bestCluster = c;
+        }
+      }
+      if (assignments[i] !== bestCluster) {
+        assignments[i] = bestCluster;
+        changed = true;
+      }
+    }
+    if (!changed) break;
+
+    // Update centroids
+    const counts = new Array(k).fill(0);
+    const newCentroids = Array.from({ length: k }, () => new Array(d).fill(0));
+    for (let i = 0; i < n; i++) {
+      const c = assignments[i];
+      counts[c]++;
+      for (let j = 0; j < d; j++) newCentroids[c][j] += vectors[i][j];
+    }
+    for (let c = 0; c < k; c++) {
+      if (counts[c] > 0) {
+        for (let j = 0; j < d; j++) centroids[c][j] = newCentroids[c][j] / counts[c];
+      }
+    }
+  }
+
+  return assignments;
+}
+
+/**
+ * Truncates text for 3D plot labels cleanly.
+ */
+function truncateLabel(text, maxLen = 22) {
+  if (!text) return "";
+  return text.length > maxLen ? text.slice(0, maxLen - 1) + "…" : text;
+}
+
+/**
+ * Draws or updates the interactive 3D scatter plot via Plotly.js.
+ */
+function render3DPlot() {
+  if (!fittedPCA || baseSentences.length === 0) return;
+
+  const base3D = fittedPCA.projectAll(baseVectors);
+
+  // Trace 1: Base Sentences
+  const traceBase = {
+    type: "scatter3d",
+    mode: "markers+text",
+    x: base3D.map(p => p[0]),
+    y: base3D.map(p => p[1]),
+    z: base3D.map(p => p[2]),
+    text: baseSentences.map(s => truncateLabel(s, 20)),
+    hovertext: baseSentences.map((s, i) =>
+      `<b>Sentence ${i + 1}</b><br>${escapeHtml(s)}<br><span style="font-size:11px; color:#aaa">PC1: ${base3D[i][0].toFixed(2)}, PC2: ${base3D[i][1].toFixed(2)}, PC3: ${base3D[i][2].toFixed(2)}</span>`
+    ),
+    hoverinfo: "text",
+    textposition: "top center",
+    textfont: {
+      family: 'system-ui, -apple-system, sans-serif',
+      size: 11,
+      color: '#334155'
+    },
+    marker: {
+      size: 7,
+      color: clusterColors,
+      opacity: 0.92,
+      line: {
+        color: '#ffffff',
+        width: 1.2
+      }
+    },
+    name: "Sentences"
+  };
+
+  const traces = [traceBase];
+
+  // Trace 2: User Added Custom Points (Distinct larger diamond markers in red)
+  if (customPoints.length > 0) {
+    const traceCustom = {
+      type: "scatter3d",
+      mode: "markers+text",
+      x: customPoints.map(p => p.coords[0]),
+      y: customPoints.map(p => p.coords[1]),
+      z: customPoints.map(p => p.coords[2]),
+      text: customPoints.map(p => `★ ${truncateLabel(p.text, 18)}`),
+      hovertext: customPoints.map(p => `<b>★ Custom Point</b><br>${escapeHtml(p.text)}`),
+      hoverinfo: "text",
+      textposition: "top center",
+      textfont: {
+        family: 'system-ui, -apple-system, sans-serif',
+        size: 12,
+        color: '#8c1e1a',
+        weight: 'bold'
+      },
+      marker: {
+        size: 11,
+        symbol: "diamond",
+        color: "#b92b27",
+        line: {
+          color: "#ffffff",
+          width: 1.5
+        }
+      },
+      name: "Custom Inputs"
+    };
+    traces.push(traceCustom);
+  }
+
+  const layout = {
+    autosize: true,
+    margin: { l: 0, r: 0, t: 10, b: 10 },
+    scene: {
+      xaxis: {
+        title: "PC1",
+        backgroundcolor: "#f6f1e6",
+        gridcolor: "#ded4c1",
+        showbackground: true,
+        zerolinecolor: "#c8bca7"
+      },
+      yaxis: {
+        title: "PC2",
+        backgroundcolor: "#f6f1e6",
+        gridcolor: "#ded4c1",
+        showbackground: true,
+        zerolinecolor: "#c8bca7"
+      },
+      zaxis: {
+        title: "PC3",
+        backgroundcolor: "#f6f1e6",
+        gridcolor: "#ded4c1",
+        showbackground: true,
+        zerolinecolor: "#c8bca7"
+      },
+      camera: {
+        eye: { x: 1.55, y: 1.55, z: 1.15 }
+      }
+    },
+    showlegend: customPoints.length > 0,
+    legend: {
+      orientation: "h",
+      x: 0.5,
+      xanchor: "center",
+      y: 0.02
+    },
+    paper_bgcolor: "transparent",
+    plot_bgcolor: "transparent"
+  };
+
+  const config = {
+    responsive: true,
+    displayModeBar: true,
+    displaylogo: false,
+    modeBarButtonsToRemove: ["resetCameraLastSave3d"]
+  };
+
+  Plotly.react("plot", traces, layout, config);
+  document.getElementById("plot-wrapper").style.display = "block";
+}
+
+/**
+ * Calculates and displays the top 5 closest pairs among baseline sentences based on full 384-dim similarity.
+ */
+function displayClosestPairs(vectors, sentences) {
+  const pairs = [];
+  for (let i = 0; i < vectors.length; i++) {
+    for (let j = i + 1; j < vectors.length; j++) {
+      pairs.push({
+        a: sentences[i],
+        b: sentences[j],
+        score: cosineSimilarity(vectors[i], vectors[j])
+      });
+    }
+  }
+
+  pairs.sort((p, q) => q.score - p.score);
+  const topPairs = pairs.slice(0, 5);
+
+  let rows = "";
+  for (const p of topPairs) {
+    rows += `
+      <tr>
+        <td>${escapeHtml(p.a)}</td>
+        <td>${escapeHtml(p.b)}</td>
+        <td><span class="similarity-pill">${p.score.toFixed(3)}</span></td>
+      </tr>`;
+  }
+
+  document.getElementById("pairs-output").innerHTML = `
+    <div style="margin-top: 22px;">
+      <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 8px; color: var(--text-main);">
+        Top 5 Semantically Closest Sentence Pairs (Full 384-D Space)
+      </h3>
+      <div class="table-container">
+        <table>
+          <tr><th>Sentence A</th><th>Sentence B</th><th>Cosine Similarity</th></tr>
+          ${rows}
+        </table>
+      </div>
+    </div>`;
+}
+
+/**
+ * Runs the full "Embed and plot" pipeline:
+ * - Parses sentence lines
+ * - Computes real embeddings with Xenova/all-MiniLM-L6-v2
+ * - Performs PCA to 3D
+ * - Clusters points with k-means
+ * - Renders 3D Plotly plot and closest pairs table
+ */
+async function embedAndPlotSentences() {
+  const statusEl = document.getElementById("embed-status");
+  statusEl.innerHTML = "";
+
+  const rawLines = document.getElementById("sentences").value
+    .split("\n")
+    .map(s => s.trim())
+    .filter(s => s.length > 0);
+
+  if (rawLines.length < 3) {
+    statusEl.innerHTML = `
+      <div class="status-msg error">
+        Please provide at least 3 sentences. PCA projection requires at least 3 points to determine 3 spatial axes (PC1, PC2, PC3).
+      </div>`;
+    return;
+  }
+
+  baseSentences = rawLines;
+  const embedBtn = document.getElementById("embed-btn");
+  embedBtn.disabled = true;
+
+  try {
+    statusEl.innerHTML = `<div class="status-msg info">Generating 384-dimensional sentence embeddings in browser...</div>`;
+
+    // Compute embeddings for all sentences
+    baseVectors = [];
+    for (let i = 0; i < baseSentences.length; i++) {
+      statusEl.innerHTML = `
+        <div class="status-msg info">
+          Embedding sentence ${i + 1} of ${baseSentences.length}: <em>"${escapeHtml(truncateLabel(baseSentences[i], 36))}"</em>...
+        </div>`;
+      const vec = await computeSentenceEmbedding(baseSentences[i]);
+      baseVectors.push(l2Normalize(vec));
+    }
+
+    statusEl.innerHTML = `<div class="status-msg info">Computing 3D PCA projection &amp; semantic clusters...</div>`;
+
+    // Fit PCA on the base vectors
+    fittedPCA = fitPCAto3D(baseVectors);
+
+    // Color points via k-means clustering in full vector space (e.g. k=3 or 4)
+    const kClusters = Math.min(4, Math.max(2, Math.floor(baseSentences.length / 2)));
+    const assignments = clusterVectors(baseVectors, kClusters);
+    clusterColors = assignments.map(c => CLUSTER_PALETTE[c % CLUSTER_PALETTE.length]);
+
+    // Update cluster badge in plot header
+    document.getElementById("plot-cluster-badge").textContent = `${kClusters} semantic clusters detected`;
+
+    // Clear previous custom points on re-embedding
+    customPoints = [];
+    updateCustomPointsBar();
+
+    // Render 3D Plot
+    render3DPlot();
+
+    // Show closest pairs table
+    displayClosestPairs(baseVectors, baseSentences);
+
+    statusEl.innerHTML = "";
+  } catch (err) {
+    console.error("Embedding pipeline error:", err);
+    statusEl.innerHTML = `
+      <div class="status-msg error">
+        <strong>Sentence Embedding Notice:</strong> ${escapeHtml(err.message || String(err))}.
+        <div style="margin-top: 8px; font-size: 13px; color: var(--text-muted);">
+          Could not download the MiniLM ONNX model from CDN (network offline or restricted origin).
+        </div>
+        <button id="activate-offline-fallback-btn" class="btn-secondary" style="margin-top: 10px; font-size: 13px;">
+          Continue with offline semantic character-trigram embeddings fallback
+        </button>
+      </div>`;
+    
+    document.getElementById("activate-offline-fallback-btn")?.addEventListener("click", () => {
+      isOfflineFallbackMode = true;
+      embedAndPlotSentences();
+    });
+  } finally {
+    embedBtn.disabled = false;
+  }
+}
+
+/**
+ * Handles adding a custom word or sentence:
+ * - Tokenizes with Section 1 tokenizer
+ * - Embeds with the same MiniLM model
+ * - Projects using the SAME fitted PCA basis (does not refit!)
+ * - Adds to 3D plot and displays nearest neighbors
+ */
+async function addCustomSentence() {
+  const inputEl = document.getElementById("new-word");
+  const text = inputEl.value.trim();
+  const outputEl = document.getElementById("new-word-output");
+
+  if (!text) {
+    alert("Please type a word or sentence to test.");
+    return;
+  }
+
+  // If base sentences not yet embedded, run embed and plot automatically first
+  if (!fittedPCA || baseSentences.length === 0) {
+    await embedAndPlotSentences();
+    if (!fittedPCA) return; // In case of error
+  }
+
+  const addBtn = document.getElementById("add-word-btn");
+  addBtn.disabled = true;
+
+  try {
+    // Step 1: Tokenize with the current vocabulary from Section 1
+    if (!vocab) buildVocabulary();
+    const tokens = encodeSentenceToTokens(text);
+    const chipsHtml = renderTokenChips(tokens);
+
+    // Step 2: Compute 384-dimensional vector with the same MiniLM model
+    const rawVector = await computeSentenceEmbedding(text);
+    const vector = l2Normalize(rawVector);
+
+    // Step 3: Project onto the SAME PCA basis already fitted on the sentence list (do NOT refit!)
+    const coords = fittedPCA.project(vector);
+
+    // Save custom point
+    customPoints.push({
+      text: text,
+      vector: vector,
+      coords: coords
+    });
+
+    // Compute top 3 nearest neighbor sentences from the baseline corpus
+    const neighbors = baseSentences.map((s, idx) => ({
+      sentence: s,
+      score: cosineSimilarity(vector, baseVectors[idx])
+    }));
+    neighbors.sort((a, b) => b.score - a.score);
+    const top3 = neighbors.slice(0, 3);
+
+    let neighborRows = "";
+    for (const n of top3) {
+      neighborRows += `
+        <tr>
+          <td>${escapeHtml(n.sentence)}</td>
+          <td><span class="similarity-pill">${n.score.toFixed(3)}</span></td>
+        </tr>`;
+    }
+
+    // Vector preview (first 8 dimensions)
+    const vecPreview = vector.slice(0, 8).map(x => (x >= 0 ? "+" : "") + x.toFixed(3)).join(", ");
+
+    outputEl.style.display = "block";
+    outputEl.innerHTML = `
+      <div class="custom-step-box">
+        <div class="custom-step-title">
+          <span>Step 1 &bull; Tokenizer Output (from Section 1 Vocabulary)</span>
+        </div>
+        ${chipsHtml}
+        <div style="font-size: 12.5px; color: var(--text-muted); margin-top: 8px;">
+          ${tokens.length} token${tokens.length > 1 ? 's' : ''} generated using current active vocabulary size.
+        </div>
+      </div>
+
+      <div class="custom-step-box">
+        <div class="custom-step-title">
+          <span>Step 2 &bull; 384-Dimensional MiniLM Embedding Vector</span>
+        </div>
+        <div style="font-size: 13px; color: var(--text-muted);">
+          First 8 of 384 dimensions (L2-normalized unit vector):
+        </div>
+        <code class="vector-preview-code">[${vecPreview}, …]</code>
+      </div>
+
+      <div class="custom-step-box">
+        <div class="custom-step-title" style="color: var(--red-primary);">
+          <span>Step 3 &bull; Projected to 3D via Existing PCA Basis &amp; Nearest Neighbors</span>
+        </div>
+        <div style="font-size: 13.5px; margin-bottom: 10px;">
+          Plot Coordinates: <strong>PC1: ${coords[0].toFixed(2)}, PC2: ${coords[1].toFixed(2)}, PC3: ${coords[2].toFixed(2)}</strong>
+          &bull; Plotted as the <strong style="color: var(--red-primary);">★ Crimson Diamond</strong> on the 3D graph.
+        </div>
+        <div style="font-size: 13px; font-weight: 650; margin-bottom: 6px; color: var(--text-main);">
+          Most semantically similar sentences in corpus:
+        </div>
+        <div class="table-container">
+          <table>
+            <tr><th>Sentence in Corpus</th><th>Cosine Similarity</th></tr>
+            ${neighborRows}
+          </table>
+        </div>
+      </div>`;
+
+    // Update active custom points bar
+    updateCustomPointsBar();
+
+    // Re-render the 3D plot with the new custom point included
+    render3DPlot();
+
+    // Clear input box
+    inputEl.value = "";
+  } catch (err) {
+    console.error("Custom sentence error:", err);
+    outputEl.style.display = "block";
+    outputEl.innerHTML = `<div class="status-msg error">Failed to process input: ${escapeHtml(err.message || String(err))}</div>`;
+  } finally {
+    addBtn.disabled = false;
+  }
+}
+
+/**
+ * Updates the pill list of custom points added to the plot.
+ */
+function updateCustomPointsBar() {
+  const bar = document.getElementById("custom-points-bar");
+  const list = document.getElementById("custom-points-list");
+
+  if (customPoints.length === 0) {
+    bar.style.display = "none";
+    list.innerHTML = "";
+    return;
+  }
+
+  bar.style.display = "block";
+  let html = "";
+  for (const p of customPoints) {
+    html += `<span class="custom-point-tag">★ ${escapeHtml(truncateLabel(p.text, 24))}</span>`;
+  }
+  html += `<button class="clear-btn" id="clear-custom-points-btn">Clear all custom points</button>`;
+  list.innerHTML = html;
+
+  document.getElementById("clear-custom-points-btn")?.addEventListener("click", () => {
+    customPoints = [];
+    document.getElementById("new-word-output").style.display = "none";
+    updateCustomPointsBar();
+    render3DPlot();
+  });
+}
+
+
+// ===========================================================================
+// SECTION 3: UI WIRING & EVENT LISTENERS
+// ===========================================================================
+
+document.addEventListener("DOMContentLoaded", () => {
+  // 1. Build vocabulary button
+  document.getElementById("build-vocab-btn").addEventListener("click", buildVocabulary);
+
+  // 2. Vocabulary slider live interaction
+  const slider = document.getElementById("vocab-slider");
+  slider.addEventListener("input", function() {
+    applyVocabSize(Number(this.value));
+    // Live update tokenization if encode sentence is present
+    tokenizeSentence();
+  });
+
+  // 3. Tokenize button & enter key
+  document.getElementById("tokenize-btn").addEventListener("click", tokenizeSentence);
+  document.getElementById("encode-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") tokenizeSentence();
+  });
+
+  // 4. Embed and plot button
+  document.getElementById("embed-btn").addEventListener("click", embedAndPlotSentences);
+
+  // 5. Add custom word or sentence
+  document.getElementById("add-word-btn").addEventListener("click", addCustomSentence);
+  document.getElementById("new-word").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") addCustomSentence();
+  });
+
+  // Auto-initialize Section 1 so user immediately sees interactive state on load
+  buildVocabulary();
+});
+</script>
+</body>
+</html>
